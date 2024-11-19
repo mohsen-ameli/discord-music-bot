@@ -13,17 +13,7 @@ intents.message_content = True
 
 client = discord.Client(intents=intents)
 
-ydl_opts = {
-    'outtmpl': 'josh',
-    'format': 'm4a/bestaudio/best',
-    # ℹ️ See help(yt_dlp.postprocessor) for a list of available Postprocessors and their arguments
-    'postprocessors': [{  # Extract audio using ffmpeg
-        'key': 'FFmpegExtractAudio',
-        'preferredcodec': 'm4a',
-    }],
-}
-
-urls = [()]
+urls = []
 
 @client.event
 async def on_ready():
@@ -32,12 +22,13 @@ async def on_ready():
 async def play(vc):
     global urls
     while len(urls) > 0:
-        url = urls[0]
-        print(url)
+        ffmpeg_options = {'options': '-vn'}
+        ydl_opts = {'format': 'bestaudio/best'}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download(url)
-        vc.play(discord.FFmpegPCMAudio('josh.m4a'))
-        await asyncio.sleep(int(url[1]))
+            song_info = ydl.extract_info(urls[0], download=False)
+        vc.play(discord.FFmpegPCMAudio(song_info["url"], **ffmpeg_options))
+        while voice_client.is_playing() or voice_client.is_paused():
+            await asyncio.sleep(1)
         urls.remove(url)
 
 initial = True
@@ -56,7 +47,7 @@ async def on_message(message):
         vc.stop()
         await play(vc)
 
-    if message.content.startswith('/play'):
+    if message.content.lower().startswith('/play'):
         url = message.content.split(' ')[1]
 
         try:
@@ -75,17 +66,12 @@ async def on_message(message):
         except:
             pass
 
-        if not url.startswith('https://www.youtube.com/playlist?list='):
-            urls.append(url)
-            if initial:
-                initial = False
-                await play(vc)
-        else:
-            urls += get_playlist_videos(url)
-            if initial:
-                initial = False
-                await play(vc)
+        urls.append(url)
         
+        if initial:
+            initial = False
+            await play(vc)
+
         await message.channel.send("Josh is GIGA gay!")
 
 client.run(os.getenv('DISCORD_TOKEN'))
